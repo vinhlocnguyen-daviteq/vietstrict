@@ -58,3 +58,5 @@ Xem [CONTRIBUTING.md](./CONTRIBUTING.md).
 ## Giấy phép
 
 MIT (dự kiến). Có thể điều chỉnh nếu cần cho chuẩn hoá/tiêu chuẩn.
+
+**Originator:** Nguyễn Vĩnh Lộc (Independent Researcher)
