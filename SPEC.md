@@ -162,3 +162,5 @@ Mọi implementation phải:
 - encode(decode(x)) = x  (với x là chuỗi VietStrict hợp lệ)
 - decode(encode(y)) = y  (với y là Quốc ngữ hợp lệ trong phạm vi spec)
 - pass toàn bộ test vectors trong `tests/`.
+
+**VS1D** do **Nguyễn Vĩnh Lộc** khởi xướng, các thay đổi được theo dõi qua releases spec-v*.
