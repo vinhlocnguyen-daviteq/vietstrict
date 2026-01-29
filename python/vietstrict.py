@@ -6,10 +6,10 @@ from __future__ import annotations
 import re
 import sys
 from dataclasses import dataclass
-from typing import Optional, Tuple, List
+from typing import Tuple, List
 
 # -----------------------------
-# VS1D v1.1 - reference implementation (spec-driven)
+# VietStrict (VS1D) v1.1 - reference implementation (spec-driven)
 # -----------------------------
 
 TONE_SUFFIXES = {"s", "f", "r", "x", "j"}  # sắc, huyền, hỏi, ngã, nặng
@@ -24,11 +24,9 @@ VOWEL_MARKERS = {
     "ư": "uw",
     "đ": "dd",
 }
-
 REV_VOWEL_MARKERS = {v: k for k, v in VOWEL_MARKERS.items()}
 
-# Vowel clusters (no tone)
-# v1.1: uyê is uyez; iê is iez; yê is yez; uô is uoz; ươ is uow; ưa is uwa; uê is uez
+# Vowel clusters (no tone) - v1.1
 CLUSTERS_QN_TO_VS = {
     "uyê": "uyez",
     "iê": "iez",
@@ -38,28 +36,22 @@ CLUSTERS_QN_TO_VS = {
     "ưa": "uwa",
     "uê": "uez",
 }
-
 CLUSTERS_VS_TO_QN = {v: k for k, v in CLUSTERS_QN_TO_VS.items()}
 
 # Vietnamese codas supported in spec
 CODAS = ["ng", "nh", "p", "t", "c", "m", "n"]
 
-# Onset list for splitting Quốc ngữ (encode)
+# Onset list for splitting Quốc ngữ (encode) and parsing VS (decode)
 # Order: longest first
 ONSETS = [
     "ngh", "ch", "gh", "kh", "nh", "ng",
     "ph", "th", "tr", "qu", "gi",
-    "dd",  # for đ after marker conversion
+    "dd",  # for đ after marker conversion (rare as onset in VS form)
     "b", "c", "d", "g", "h", "k", "l", "m", "n", "p", "q", "r", "s", "t", "v", "x",
 ]
 
-# Map accented Vietnamese vowels to (base_without_tone, tone_suffix)
-# base retains vowel quality diacritics (ă â ê ô ơ ư)
-_ACCENT_MAP: dict[str, Tuple[str, str]] = {}
-
+# Build accented vowel maps: accented -> (base, tone) and (base, tone) -> accented
 def _build_accent_maps() -> Tuple[dict[str, Tuple[str, str]], dict[Tuple[str, str], str]]:
-    # Build from explicit sets (covers uppercase too).
-    # tone: s f r x j (sắc, huyền, hỏi, ngã, nặng), "" = ngang
     groups = {
         "a":  {"": "a", "s": "á", "f": "à", "r": "ả", "x": "ã", "j": "ạ"},
         "ă":  {"": "ă", "s": "ắ", "f": "ằ", "r": "ẳ", "x": "ẵ", "j": "ặ"},
@@ -83,12 +75,10 @@ def _build_accent_maps() -> Tuple[dict[str, Tuple[str, str]], dict[Tuple[str, st
             accent_to_base[ch] = (base, tone)
             base_to_accent[(base, tone)] = ch
 
-        # uppercase
+        # uppercase variants
         base_u = base.upper()
-        mp_u = {}
         for tone, ch in mp.items():
             ch_u = ch.upper()
-            mp_u[tone] = ch_u
             accent_to_base[ch_u] = (base_u, tone)
             base_to_accent[(base_u, tone)] = ch_u
 
@@ -96,17 +86,19 @@ def _build_accent_maps() -> Tuple[dict[str, Tuple[str, str]], dict[Tuple[str, st
 
 ACCENT_TO_BASE, BASE_TO_ACCENT = _build_accent_maps()
 
-VOWELS_QN = set("aăâeêioôơuưyAĂÂEÊIOÔƠUƯY")
-
 @dataclass(frozen=True)
 class ParsedVS:
     onset: str
-    vowel_cluster: str
+    vowel_part: str   # VS vowel part (may include clusters + markers + plain vowels), no tone
     coda: str
-    tone: str  # s f r x j or ""
+    tone: str         # s f r x j or ""
+
+# -----------------------------
+# Encode (Quốc ngữ -> VS)
+# -----------------------------
 
 def _split_onset_qn(s: str) -> Tuple[str, str]:
-    """Split Quốc ngữ syllable into onset + rest (rhyme) using orthographic onsets qu/gi etc."""
+    """Split Quốc ngữ syllable into onset + rest (rhyme) using orthographic onsets."""
     s_lower = s.lower()
     for o in sorted(ONSETS, key=len, reverse=True):
         if s_lower.startswith(o):
@@ -114,15 +106,15 @@ def _split_onset_qn(s: str) -> Tuple[str, str]:
     return "", s
 
 def _strip_tone_qn(s: str) -> Tuple[str, str]:
-    """Return (string without tone marks, tone_suffix). Tone is determined by any accented vowel."""
+    """Return (string without tone marks, tone_suffix)."""
     tone = ""
     out = []
     for ch in s:
         if ch in ACCENT_TO_BASE:
             base, t = ACCENT_TO_BASE[ch]
-            if t != "":
-                if tone != "" and tone != t:
-                    raise ValueError(f"Multiple different tones in one syllable: {s!r}")
+            if t:
+                if tone and tone != t:
+                    raise ValueError(f"Multiple tones in one syllable: {s!r}")
                 tone = t
             out.append(base)
         else:
@@ -130,10 +122,9 @@ def _strip_tone_qn(s: str) -> Tuple[str, str]:
     return "".join(out), tone
 
 def _apply_vowel_markers_encode(qn_no_tone: str) -> str:
-    """Apply dd + av/az/ez/oz/ow/uw markers on single letters (after cluster replacement)."""
-    res = []
+    """Apply dd + av/az/ez/oz/ow/uw markers on single letters."""
+    res: List[str] = []
     for ch in qn_no_tone:
-        # handle đ/Đ
         if ch in ("đ", "Đ"):
             res.append("dd" if ch == "đ" else "DD")
             continue
@@ -149,7 +140,7 @@ def _apply_vowel_markers_encode(qn_no_tone: str) -> str:
 def encode(qn: str) -> str:
     """
     Encode a single Vietnamese syllable (Quốc ngữ) into VS1D.
-    Assumes input is one syllable (no spaces). Keeps case as-is (best-effort).
+    Assumes input is one syllable (no spaces).
     """
     if not qn:
         return qn
@@ -158,139 +149,139 @@ def encode(qn: str) -> str:
 
     onset, rhyme = _split_onset_qn(qn_no_tone)
 
-    # Replace vowel clusters in the rhyme ONLY (protect qu/gi u/i)
+    # Replace vowel clusters in the rhyme (orthography-preserving)
     rhyme_lower = rhyme.lower()
-    # longest first
     for qn_cluster, vs_cluster in sorted(CLUSTERS_QN_TO_VS.items(), key=lambda kv: len(kv[0]), reverse=True):
-        # case handling: keep as lowercase tokens; case in spec is typically lowercase.
         rhyme_lower = rhyme_lower.replace(qn_cluster, vs_cluster)
 
-    # restore original casing style for onset+rhyme? (keep onset original, rhyme tokens lowercase)
     vs = onset.lower() + rhyme_lower
 
-    # Now apply single-letter markers (ă â ê ô ơ ư, đ) across the whole syllable
-    # But our cluster replacement already consumed ê/ô/ơ in clusters; remaining standalone will be marked.
+    # Apply markers (ă â ê ô ơ ư, đ) across the whole syllable
     vs = _apply_vowel_markers_encode(vs)
 
-    # Append tone suffix at end
+    # Append tone suffix
     if tone:
         vs = vs + tone
 
     return vs
 
+# -----------------------------
+# Parse VS (VS -> components)
+# -----------------------------
+
+def _has_vowel_signal(s: str) -> bool:
+    if not s:
+        return False
+    if re.search(r"[aeiouy]", s):
+        return True
+    if any(tok in s for tok in REV_VOWEL_MARKERS.keys()):
+        return True
+    if any(tok in s for tok in CLUSTERS_VS_TO_QN.keys()):
+        return True
+    return False
+
 def _parse_vs(vs: str) -> ParsedVS:
+    """
+    Deterministic parse following spec spirit:
+    1) tone suffix (if any) at end
+    2) coda (if any) at end (longest-match)
+    3) remaining stem = onset + vowel_part
+       onset is longest-match from ONSETS such that remaining has vowel signal;
+       otherwise onset is empty.
+    """
     if not vs:
         raise ValueError("Empty syllable")
 
-    # Step 1: tone suffix
+    core = vs.lower()
+
+    # 1) tone suffix
     tone = ""
-    core = vs
     if core[-1] in TONE_SUFFIXES:
         tone = core[-1]
         core = core[:-1]
 
-    core_l = core.lower()
-
-    # Step 2: onset special (qu/gi) for decoding; treat them as onset if present
-    onset = ""
-    rest = core_l
-    if rest.startswith("qu"):
-        onset = "qu"
-        rest = rest[2:]
-    elif rest.startswith("gi"):
-        onset = "gi"
-        rest = rest[2:]
-
-    # Step 3: vowel cluster longest-match
-    # Candidates: cluster tokens + marker tokens + plain vowels.
-    # We first try known clusters (uyez, iez, yez, uoz, uow, uwa, uez) then marker tokens then single vowels.
-    clusters = sorted(CLUSTERS_VS_TO_QN.keys(), key=len, reverse=True)
-    marker_tokens = sorted(REV_VOWEL_MARKERS.keys(), key=len, reverse=True)
-
-    vowel_cluster_vs = ""
-    for c in clusters:
-        if rest.startswith(c):
-            vowel_cluster_vs = c
-            break
-
-    # If no special cluster, we will take the first vowel-ish unit (marker token or single vowel letter)
-    if not vowel_cluster_vs:
-        for tok in marker_tokens:
-            if rest.startswith(tok):
-                vowel_cluster_vs = tok
-                break
-    if not vowel_cluster_vs:
-        if rest and rest[0] in "aeiouy":
-            vowel_cluster_vs = rest[0]
-
-    if not vowel_cluster_vs:
-        raise ValueError(f"Cannot find vowel cluster in {vs!r}")
-
-    rest2 = rest[len(vowel_cluster_vs):]
-
-    # Step 4: coda
+    # 2) coda suffix (longest-match)
     coda = ""
+    stem = core
     for cd in sorted(CODAS, key=len, reverse=True):
-        if rest2 == cd:
+        if stem.endswith(cd):
             coda = cd
-            rest2 = ""
+            stem = stem[:-len(cd)]
             break
 
-    # Step 5: remaining must be onset (if we didn't consume qu/gi already)
-    if rest2:
-        # whatever remains is onset (before vowel cluster), but in our strategy we always chose vowel at start,
-        # so rest2 should be "" if coda matched; otherwise invalid.
-        raise ValueError(f"Invalid trailing characters after parsing in {vs!r}: {rest2!r}")
+    # stem = onset + vowel_part
+    onset = ""
+    vowel_part = stem
 
-    return ParsedVS(onset=onset, vowel_cluster=vowel_cluster_vs, coda=coda, tone=tone)
+    # choose onset (longest-match) only if remainder has vowel signal
+    for o in sorted(ONSETS, key=len, reverse=True):
+        if stem.startswith(o):
+            rem = stem[len(o):]
+            if _has_vowel_signal(rem):
+                onset = o
+                vowel_part = rem
+                break
 
-def _vs_vowel_to_qn(vs_vowel: str) -> str:
-    """Convert VS vowel cluster token to Quốc ngữ (no tone)."""
-    if vs_vowel in CLUSTERS_VS_TO_QN:
-        return CLUSTERS_VS_TO_QN[vs_vowel]
-    if vs_vowel in REV_VOWEL_MARKERS:
-        return REV_VOWEL_MARKERS[vs_vowel]
-    # plain vowel
-    return vs_vowel
+    # if no onset matched, onset is empty; ensure vowel_part has vowel signal
+    if onset == "":
+        vowel_part = stem
+        if not _has_vowel_signal(vowel_part):
+            raise ValueError(f"Cannot find vowel part in {vs!r}")
+
+    return ParsedVS(onset=onset, vowel_part=vowel_part, coda=coda, tone=tone)
+
+# -----------------------------
+# Decode (VS -> Quốc ngữ)
+# -----------------------------
+
+def _vs_vowel_to_qn(vs_vowel_part: str) -> str:
+    """
+    Convert VS vowel_part (may contain cluster tokens and marker tokens) to Quốc ngữ (no tone).
+    Example: 'ozi' -> 'ôi' ; 'uyez' -> 'uyê'
+    """
+    s = vs_vowel_part.lower()
+
+    # Replace long clusters first
+    for tok, qn in sorted(CLUSTERS_VS_TO_QN.items(), key=lambda kv: len(kv[0]), reverse=True):
+        s = s.replace(tok, qn)
+
+    # Replace marker tokens
+    for tok, ch in sorted(REV_VOWEL_MARKERS.items(), key=lambda kv: len(kv[0]), reverse=True):
+        s = s.replace(tok, ch)
+
+    return s
 
 def _choose_tone_target_index(vowel_seq: str) -> int:
     """
-    Choose which vowel letter in the vowel sequence to carry tone mark.
-    This is the Vietnamese orthography rule simplified but correct for the clusters in VS spec.
+    Choose the vowel letter to carry tone mark (simplified but works for VS1D-defined clusters/markers).
+    Priority: ê ô ơ â ă ư (tone sits there if present).
+    Otherwise:
+      - if starts with ia/ua/ưa/uy -> first vowel
+      - else -> first vowel
     """
-    # Priority: ê ô ơ â ă ư (tone sits on these letters if present)
     priority = ["ê", "ô", "ơ", "â", "ă", "ư", "Ê", "Ô", "Ơ", "Â", "Ă", "Ư"]
     for p in priority:
         idx = vowel_seq.find(p)
         if idx != -1:
             return idx
 
-    # Special sequences where tone goes on first vowel: ia, ua, ưa, uy (common rule)
     low = vowel_seq.lower()
-    if low.startswith("ia") or low.startswith("ua") or low.startswith("ưa") or low.startswith("uy"):
+    if low.startswith(("ia", "ua", "ưa", "uy")):
         return 0
 
-    # Default: first vowel
     return 0
 
 def _apply_tone_to_vowel_seq(vowel_seq: str, tone: str) -> str:
-    """Apply tone to one vowel inside vowel_seq (no tone -> with tone)."""
     if not tone:
         return vowel_seq
 
     idx = _choose_tone_target_index(vowel_seq)
     ch = vowel_seq[idx]
-    if ch not in BASE_TO_ACCENT:
-        # It might be a plain vowel without diacritic base mapping (still present in mapping)
-        pass
 
-    # Convert target char to accented char
-    base = ch
-    # base must be one of keys in BASE_TO_ACCENT: includes AĂÂEÊI OÔƠUƯY etc
-    if (base, tone) not in BASE_TO_ACCENT:
-        raise ValueError(f"Cannot apply tone {tone!r} to vowel {base!r} in {vowel_seq!r}")
+    if (ch, tone) not in BASE_TO_ACCENT:
+        raise ValueError(f"Cannot apply tone {tone!r} to vowel {ch!r} in {vowel_seq!r}")
 
-    accented = BASE_TO_ACCENT[(base, tone)]
+    accented = BASE_TO_ACCENT[(ch, tone)]
     return vowel_seq[:idx] + accented + vowel_seq[idx+1:]
 
 def decode(vs: str) -> str:
@@ -299,16 +290,16 @@ def decode(vs: str) -> str:
     """
     p = _parse_vs(vs)
 
-    vowel_qn = _vs_vowel_to_qn(p.vowel_cluster)
-    syllable_no_tone = p.onset + vowel_qn + p.coda
-
-    # Apply tone onto vowel sequence (the rhyme's vowel part)
+    vowel_qn = _vs_vowel_to_qn(p.vowel_part)
     toned_vowel = _apply_tone_to_vowel_seq(vowel_qn, p.tone)
 
     return p.onset + toned_vowel + p.coda
 
+# -----------------------------
+# Simple text helpers + CLI
+# -----------------------------
+
 def encode_text(text: str) -> str:
-    """Encode a text by splitting on whitespace; keeps punctuation attached (simple)."""
     parts = text.split()
     return " ".join(encode(w) for w in parts)
 
