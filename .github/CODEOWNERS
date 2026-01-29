@@ -1,0 +1,16 @@
+# VietStrict CODEOWNERS
+
+# Specification & governance
+SPEC.md @vinhlocnguyen-daviteq
+CHANGELOG.md @vinhlocnguyen-daviteq
+GOVERNANCE.md @vinhlocnguyen-daviteq
+
+# Test vectors
+tests/* @vinhlocnguyen-daviteq
+
+# Authorship & citation
+AUTHORS.md @vinhlocnguyen-daviteq
+CITATION.cff @vinhlocnguyen-daviteq
+
+# Default fallback
+* @vinhlocnguyen-daviteq
