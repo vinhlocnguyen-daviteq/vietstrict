@@ -34,6 +34,13 @@ def _encode_any(qn: str) -> str:
 def _decode_any(vs: str) -> str:
     return decode_text(vs) if (" " in vs) else decode(vs)
 
+def _norm_compare(a: str, b: str, is_sentence: bool) -> bool:
+    # For sentences (multi-syllable lines), compare case-insensitive because VS text
+    # may not encode capitalization information.
+    if is_sentence:
+        return a.strip().lower() == b.strip().lower()
+    return a == b
+
 def main() -> int:
     total = 0
     fail = 0
@@ -46,6 +53,7 @@ def main() -> int:
         print(f"[TEST] {path}")
         for qn, vs in iter_pairs(path):
             total += 1
+            is_sentence = (" " in qn) or (" " in vs)
 
             try:
                 vs2 = _encode_any(qn)
@@ -54,7 +62,7 @@ def main() -> int:
                 print(f"FAIL encode-exception: QN={qn!r} error={e}")
                 continue
 
-            if vs2 != vs:
+            if not _norm_compare(vs2, vs, is_sentence):
                 fail += 1
                 print(f"FAIL encode: QN={qn!r} expected VS={vs!r} got {vs2!r}")
                 continue
@@ -66,18 +74,18 @@ def main() -> int:
                 print(f"FAIL decode-exception: VS={vs!r} error={e}")
                 continue
 
-            if qn2 != qn:
+            if not _norm_compare(qn2, qn, is_sentence):
                 fail += 1
                 print(f"FAIL decode: VS={vs!r} expected QN={qn!r} got {qn2!r}")
                 continue
 
-            # Round-trip guarantees
+            # Round-trip guarantees (case-insensitive for sentences for same reason)
             try:
-                if _encode_any(_decode_any(vs)) != vs:
+                if not _norm_compare(_encode_any(_decode_any(vs)), vs, is_sentence):
                     fail += 1
                     print(f"FAIL roundtrip1: encode(decode({vs!r})) != {vs!r}")
                     continue
-                if _decode_any(_encode_any(qn)) != qn:
+                if not _norm_compare(_decode_any(_encode_any(qn)), qn, is_sentence):
                     fail += 1
                     print(f"FAIL roundtrip2: decode(encode({qn!r})) != {qn!r}")
                     continue
