@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+title: "VietStrict (VS1D): Vietnamese Strict 1D Encoding"
+message: "If you use this work, please cite it as below."
+type: software
+authors:
+  - family-names: "Nguyen"
+    given-names: "Vinh Loc"
+    affiliation: "Independent Researcher"
+version: 1.1
+date-released: 2026-01-29
+repository-code: "https://github.com/vinhlocnguyen-daviteq/vietstrict"
+keywords:
+  - Vietnamese
+  - encoding
+  - text-representation
+  - NLP
+  - tokenization
+license: MIT
