@@ -39,7 +39,7 @@ Nguyên âm thường giữ nguyên: `a e i o u y`.
 |---|---|
 | iê | `iez` |
 | yê | `yez` |
-| uyê | `uiez` |
+| uyê | `uyez` |
 | uê | `uez` |
 | uô | `uoz` |
 | ươ | `uow` |
@@ -76,13 +76,65 @@ Coda hợp lệ: `p t c m n ng nh` hoặc rỗng.
 ---
 
 ## 6. Quy tắc parse (đọc chuỗi VietStrict)
-Giải mã một âm tiết VietStrict theo thứ tự:
-1) Nếu ký tự cuối thuộc `{s f r x j}` thì tách tone.
-2) Phân tách phần còn lại thành onset/vowel/coda bằng **longest-match** cho `VowelCluster`:
-   - ưu tiên cụm dài nhất: `uiez, uow, uoz, iez, ...`
-   - sau đó tới marker ngắn: `av, az, ez, oz, ow, uw`
-3) Coda (nếu có) là một trong: `ng, nh, p, t, c, m, n`.
-4) Phần còn lại là onset.
+
+Giải mã một âm tiết VietStrict theo thứ tự **xác định, không suy đoán**, như sau:
+
+### Bước 1. Tách thanh điệu (tone)
+Nếu ký tự cuối cùng thuộc tập `{s, f, r, x, j}` thì:
+- tách ký tự đó ra làm **tone suffix**
+- phần còn lại tiếp tục được parse
+
+Nếu không có, thanh điệu là **ngang**.
+
+---
+
+### Bước 2. Xác định phụ âm đầu đặc biệt theo chính tả (onset đặc biệt)
+Nếu chuỗi (sau khi tách tone) **bắt đầu bằng** một trong các chuỗi sau thì coi đó là **onset đặc biệt**:
+- `qu`
+- `gi`
+
+Lưu ý: không có onset đặc biệt `uy`. Các âm tiết bắt đầu bằng `uy...` (ví dụ: *Uyên*) được xử lý như trường hợp onset rỗng + VowelCluster bắt đầu bằng `uy...`.
+
+---
+### Bước 3. Nhận diện cụm nguyên âm (VowelCluster) bằng longest-match
+Sau khi xác định onset đặc biệt (nếu có), ta tìm **VowelCluster** trong phần còn lại bằng nguyên tắc **longest-match**.
+
+- Ưu tiên các cụm nguyên âm dài nhất, ví dụ:
+  - `uyez` (uyê)
+  - `uow` (ươ)
+  - `uoz` (uô)
+  - `uwa` (ưa)
+  - `uez` (uê)
+  - `iez` (iê)
+  - `yez` (yê)
+
+- Sau đó mới xét tới các marker nguyên âm ngắn:
+  - `av`, `az`, `ez`, `oz`, `ow`, `uw`
+
+Mỗi âm tiết phải có **đúng một** VowelCluster hợp lệ.
+
+---
+
+### Bước 4. Nhận diện phụ âm cuối (coda)
+Nếu sau khi tách onset (nếu có) và VowelCluster vẫn còn ký tự, thì phần còn lại (nếu tồn tại) phải là **một coda hợp lệ**, thuộc tập:
+- `ng`, `nh`
+- `p`, `t`, `c`, `m`, `n`
+
+Nếu không khớp, chuỗi được coi là **không hợp lệ** theo VietStrict.
+
+---
+
+### Bước 5. Phần còn lại là onset (và phải hợp lệ)
+Trong trường hợp **không có onset đặc biệt** (`qu`, `gi`), onset (nếu có) là phần nằm trước VowelCluster.
+
+Onset phải là **chuỗi phụ âm hợp lệ của tiếng Việt** (ví dụ: `b, c/k, ch, d, dd, g, gh, h, kh, l, m, n, ng, ngh, nh, p, ph, r, s, t, th, tr, v, x`).
+Nếu onset không hợp lệ, chuỗi được coi là **không hợp lệ**.
+
+---
+
+### Ghi chú về tính strict
+- Không có bước nào trong quá trình parse được phép suy đoán dựa trên từ điển hoặc ngữ cảnh.
+- Một chuỗi VietStrict hợp lệ phải có **duy nhất một cách parse** theo các quy tắc trên.
 
 ---
 
@@ -99,7 +151,7 @@ Lưu ý: đây là bước hiển thị, không ảnh hưởng tới encode.
 - tối → `tozis`
 - cõi → `coix`
 - đánh → `ddanhs`
-- quyền → `quuieznf`
+- quyền → `quyeznf`
 - nghiêm → `nghiezm`
 - trước → `truowcs`
 
