@@ -38,7 +38,7 @@ VietStrict (Vietnamese Strict 1D, viết tắt **VS1D**) là một **lớp biể
 
 ## Trạng thái
 
-- Spec: **v1.0 (ổn định)**
+- Spec: **v1.1 (ổn định)**
 - Bộ test: đang mở rộng
 - Reference implementation: chưa có (mời cộng đồng đóng góp)
 
