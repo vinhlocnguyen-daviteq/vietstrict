@@ -6,7 +6,7 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
-from vietstrict import encode, decode
+from vietstrict import encode, decode, encode_text, decode_text
 
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = [
@@ -24,10 +24,15 @@ def iter_pairs(tsv_path: Path):
             vs = row[1].strip()
             if not qn or not vs:
                 continue
-            # allow comments
             if qn.startswith("#") or vs.startswith("#"):
                 continue
             yield qn, vs
+
+def _encode_any(qn: str) -> str:
+    return encode_text(qn) if (" " in qn) else encode(qn)
+
+def _decode_any(vs: str) -> str:
+    return decode_text(vs) if (" " in vs) else decode(vs)
 
 def main() -> int:
     total = 0
@@ -43,7 +48,7 @@ def main() -> int:
             total += 1
 
             try:
-                vs2 = encode(qn)
+                vs2 = _encode_any(qn)
             except Exception as e:
                 fail += 1
                 print(f"FAIL encode-exception: QN={qn!r} error={e}")
@@ -55,7 +60,7 @@ def main() -> int:
                 continue
 
             try:
-                qn2 = decode(vs)
+                qn2 = _decode_any(vs)
             except Exception as e:
                 fail += 1
                 print(f"FAIL decode-exception: VS={vs!r} error={e}")
@@ -68,11 +73,11 @@ def main() -> int:
 
             # Round-trip guarantees
             try:
-                if encode(decode(vs)) != vs:
+                if _encode_any(_decode_any(vs)) != vs:
                     fail += 1
                     print(f"FAIL roundtrip1: encode(decode({vs!r})) != {vs!r}")
                     continue
-                if decode(encode(qn)) != qn:
+                if _decode_any(_encode_any(qn)) != qn:
                     fail += 1
                     print(f"FAIL roundtrip2: decode(encode({qn!r})) != {qn!r}")
                     continue
