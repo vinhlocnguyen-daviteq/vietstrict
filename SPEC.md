@@ -1,0 +1,112 @@
+# SPEC — VietStrict (VS1D) v1.0
+
+## 1. Định nghĩa
+VietStrict là encoding 1D, ASCII-only cho tiếng Việt, với mục tiêu:
+- không dùng dấu phụ Unicode,
+- không suy đoán ngữ cảnh,
+- biểu diễn đầy đủ nguyên âm đặc biệt và thanh điệu,
+- giải mã 1–1 về Quốc ngữ.
+
+Âm tiết được biểu diễn theo cấu trúc: Onset + VowelCluster + Coda + Tone
+
+Trong đó:
+- `Onset`: phụ âm đầu
+- `VowelCluster`: cụm nguyên âm (có marker)
+- `Coda`: phụ âm cuối (nếu có)
+- `Tone`: hậu tố thanh (nếu có)
+
+---
+
+## 2. Bảng ký hiệu bắt buộc
+
+### 2.1 Phụ âm đặc biệt
+- `đ` → `dd` (bắt buộc)
+
+### 2.2 Nguyên âm đặc biệt (bắt buộc)
+| Quốc ngữ | VietStrict |
+|---|---|
+| ă | `av` |
+| â | `az` |
+| ê | `ez` |
+| ô | `oz` |
+| ơ | `ow` |
+| ư | `uw` |
+
+Nguyên âm thường giữ nguyên: `a e i o u y`.
+
+### 2.3 Cụm nguyên âm đặc biệt
+| Quốc ngữ | VietStrict |
+|---|---|
+| iê | `iez` |
+| yê | `yez` |
+| uyê | `uiez` |
+| uê | `uez` |
+| uô | `uoz` |
+| ươ | `uow` |
+| ưa | `uwa` |
+
+---
+
+## 3. Thanh điệu (tone suffix)
+Thanh điệu được biểu diễn bằng hậu tố ở CUỐI âm tiết:
+
+| Thanh | Hậu tố |
+|---|---|
+| ngang | (rỗng) |
+| sắc | `s` |
+| huyền | `f` |
+| hỏi | `r` |
+| ngã | `x` |
+| nặng | `j` |
+
+**Quy tắc:** Tone suffix (nếu có) luôn là ký tự cuối cùng của âm tiết.
+
+---
+
+## 4. Phụ âm cuối (coda)
+Coda hợp lệ: `p t c m n ng nh` hoặc rỗng.
+
+---
+
+## 5. Quy tắc strict (không suy đoán)
+- Không có “ngầm hiểu” kiểu: `o` sau `qu` là `ô`.
+- Nếu nguyên âm là `ô` thì luôn phải có `oz`.
+- Nếu nguyên âm là `ă` thì luôn phải có `av`, v.v.
+
+---
+
+## 6. Quy tắc parse (đọc chuỗi VietStrict)
+Giải mã một âm tiết VietStrict theo thứ tự:
+1) Nếu ký tự cuối thuộc `{s f r x j}` thì tách tone.
+2) Phân tách phần còn lại thành onset/vowel/coda bằng **longest-match** cho `VowelCluster`:
+   - ưu tiên cụm dài nhất: `uiez, uow, uoz, iez, ...`
+   - sau đó tới marker ngắn: `av, az, ez, oz, ow, uw`
+3) Coda (nếu có) là một trong: `ng, nh, p, t, c, m, n`.
+4) Phần còn lại là onset.
+
+---
+
+## 7. Quy tắc `qu` và `gi` khi GẮN DẤU (decode ra Quốc ngữ)
+Khi hiển thị Quốc ngữ, việc đặt dấu theo chính tả cần xử lý riêng:
+- `qu` và `gi` có ký tự `u/i` thuộc phụ âm đầu (không thuộc nguyên âm hạt nhân).
+- Vì vậy dấu thanh phải đặt lên nguyên âm hạt nhân của vần (theo quy tắc chính tả Việt).
+
+Lưu ý: đây là bước hiển thị, không ảnh hưởng tới encode.
+
+---
+
+## 8. Ví dụ chuẩn
+- tối → `tozis`
+- cõi → `coix`
+- đánh → `ddanhs`
+- quyền → `quuieznf`
+- nghiêm → `nghiezm`
+- trước → `truowcs`
+
+---
+
+## 9. Nguyên tắc kiểm thử
+Mọi implementation phải:
+- encode(decode(x)) = x  (với x là chuỗi VietStrict hợp lệ)
+- decode(encode(y)) = y  (với y là Quốc ngữ hợp lệ trong phạm vi spec)
+- pass toàn bộ test vectors trong `tests/`.
