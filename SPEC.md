@@ -1,4 +1,4 @@
-# SPEC — VietStrict (VS1D) v1.0
+# SPEC — VietStrict (VS1D) v1.1
 
 ## 1. Định nghĩa
 VietStrict là encoding 1D, ASCII-only cho tiếng Việt, với mục tiêu:
