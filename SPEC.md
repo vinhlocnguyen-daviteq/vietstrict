@@ -136,6 +136,12 @@ Nếu onset không hợp lệ, chuỗi được coi là **không hợp lệ**.
 - Không có bước nào trong quá trình parse được phép suy đoán dựa trên từ điển hoặc ngữ cảnh.
 - Một chuỗi VietStrict hợp lệ phải có **duy nhất một cách parse** theo các quy tắc trên.
 
+### Ghi chú về phạm vi giải mã (decode)
+
+- Phép `decode` trong đặc tả này chỉ được **đảm bảo đúng và đảo ngược 100%** đối với các chuỗi VietStrict (VS1D) hợp lệ, biểu diễn các âm tiết **tiếng Việt** theo đúng cấu trúc đã định nghĩa.
+- Khi áp dụng `decode` lên văn bản ASCII bất kỳ, từ vay mượn, tên riêng, thương hiệu, hoặc các ngôn ngữ không tuân theo cấu trúc âm tiết tiếng Việt, hành vi giải mã **không được đảm bảo**, trừ khi có thêm thông tin về ranh giới hoặc loại token.
+- Nói cách khác, VietStrict là một phép mã hoá **đặc thù cho tiếng Việt**, không phải là một phép biến đổi chung cho mọi chuỗi ASCII.
+  
 ---
 
 ## 7. Quy tắc `qu` và `gi` khi GẮN DẤU (decode ra Quốc ngữ)
