@@ -257,13 +257,39 @@ def decode(vs: str) -> str:
 # Text helpers + CLI
 # -----------------------------
 
+def _apply_case_like(src: str, dst: str) -> str:
+    """
+    Apply a simple, deterministic casing policy from src token to dst token.
+    - UPPER -> UPPER
+    - Title -> Title (capitalize first letter, rest lower)
+    - else  -> lower
+    """
+    if not dst:
+        return dst
+    if src.isupper():
+        return dst.upper()
+    # "Titlecase" in Python: first cased char upper, rest lower (common for names)
+    if src[:1].isupper() and src[1:].islower():
+        return dst[:1].upper() + dst[1:].lower()
+    return dst.lower()
+
 def encode_text(text: str) -> str:
     parts = text.split()
-    return " ".join(encode(w) for w in parts)
+    out = []
+    for tok in parts:
+        vs = encode(tok)
+        vs = _apply_case_like(tok, vs)
+        out.append(vs)
+    return " ".join(out)
 
 def decode_text(text: str) -> str:
     parts = text.split()
-    return " ".join(decode(w) for w in parts)
+    out = []
+    for tok in parts:
+        qn = decode(tok.lower())  # decode expects vs in canonical lowercase tokens
+        qn = _apply_case_like(tok, qn)  # mirror casing of VS token
+        out.append(qn)
+    return " ".join(out)
 
 def _usage() -> None:
     print(
